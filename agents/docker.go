@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"reflect"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -15,16 +14,16 @@ import (
 
 type DockerAgent struct {
 	BaseAgent
-	workdir string
-	client  *client.Client
-	// action  string
-	// image   string
-	// args    []string
+	workdir    string
+	client     *client.Client
+	image      string
+	dockerfile string
+	cmd        []string
 }
 
 const (
 	Build Action = "build"
-	Run          = "run"
+	Run   Action = "run"
 )
 
 func getClient() (*client.Client, error) {
@@ -59,20 +58,7 @@ func NewDockerAgent(workdir string) *DockerAgent {
 	}
 }
 
-func (d DockerAgent) RunAction(a Action) error {
-	f := reflect.ValueOf(d.action[a])
-
-	in := make([]reflect.Value, len(params))
-	for k, param := range params {
-		in[k] = reflect.ValueOf(param)
-	}
-	var res []reflect.Value
-	res = f.Call(in)
-	result = res[0].Interface()
-	return
-}
-
-func (d DockerAgent) BuildImage(ctx context.Context, dockerfile string, image []string) error {
+func (d DockerAgent) BuildImage(ctx context.Context) error {
 
 	tar, err := archive.TarWithOptions(d.workdir, &archive.TarOptions{})
 	if err != nil {
@@ -80,8 +66,8 @@ func (d DockerAgent) BuildImage(ctx context.Context, dockerfile string, image []
 	}
 
 	opts := types.ImageBuildOptions{
-		Dockerfile: dockerfile,
-		Tags:       image,
+		Dockerfile: d.dockerfile,
+		Tags:       []string{d.image},
 		Remove:     true,
 	}
 
@@ -101,11 +87,11 @@ func (d DockerAgent) BuildImage(ctx context.Context, dockerfile string, image []
 	return nil
 }
 
-func (d DockerAgent) RunContainer(ctx context.Context, image string, command []string) error {
+func (d DockerAgent) RunContainer(ctx context.Context) error {
 
 	resp, err := d.client.ContainerCreate(ctx, &container.Config{
-		Image: image,
-		Cmd:   command,
+		Image: d.image,
+		Cmd:   d.cmd,
 		Tty:   false,
 	}, nil, nil, nil, "")
 	if err != nil {
